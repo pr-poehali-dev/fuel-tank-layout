@@ -13,42 +13,43 @@ const H = 420;
 const CX = 0.866;
 const SY = 0.5;
 
+// Цвета в духе технического чертежа
+const EDGE_COLOR    = '#2563a8';   // видимые рёбра — насыщенный синий
+const HIDDEN_COLOR  = '#60a0d8';   // скрытые рёбра — светлее
+const FACE_FILL     = 'rgba(96, 175, 230, 0.08)'; // грани — почти прозрачный голубой
+
 function isoProject(x: number, y: number, z: number, ox: number, oy: number) {
-  return {
-    px: ox + (x - z) * CX,
-    py: oy + (x + z) * SY - y,
-  };
+  return { px: ox + (x - z) * CX, py: oy + (x + z) * SY - y };
 }
+
+function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
 
 function getFaceNozzles(nozzles: Nozzle[], face: Nozzle['position']['face']) {
   return nozzles.filter(n => n.enabled && n.position.face === face);
 }
 
-function lerp(a: number, b: number, t: number) { return a + (b - a) * t; }
-
-// Нормирует размеры бака в SVG-пространство, сохраняя пропорции
 function normalizeDims(length: number, width: number, height: number, maxBox: number) {
-  const maxSide = Math.max(length, width, height);
-  const s = maxBox / maxSide;
-  return {
-    bx: (length / 2) * s,
-    bz: (width / 2) * s,
-    by: height * s,
-  };
+  const s = maxBox / Math.max(length, width, height);
+  return { bx: (length / 2) * s, bz: (width / 2) * s, by: height * s };
 }
 
 function normalizeCylinder(diameter: number, length: number, height: number, maxBox: number, isHorizontal: boolean) {
-  const maxSide = Math.max(diameter, length, height);
-  const s = maxBox / maxSide;
+  const s = maxBox / Math.max(diameter, length, height);
   if (isHorizontal) {
-    // length = длина цилиндра по оси X, diameter = диаметр
     return { len: (length / 2) * s, ry: (diameter / 2) * s, rz: (diameter / 4) * s };
-  } else {
-    // length = width = diameter, height = высота
-    return { rx: (diameter / 2) * s, rz: (diameter / 4) * s, h: height * s };
   }
+  return { rx: (diameter / 2) * s, rz: (diameter / 4) * s, h: height * s };
 }
 
+// Общий атрибут штриха для скрытых линий
+const DASH_PROPS = {
+  stroke: HIDDEN_COLOR,
+  strokeWidth: 1.5,
+  strokeDasharray: '6 4',
+  opacity: 0.85,
+};
+
+// ─── NozzleDot ───────────────────────────────────────────────────────────────
 interface NozzleDotProps {
   cx: number; cy: number;
   nozzle: Nozzle;
@@ -66,7 +67,7 @@ function NozzleDot({ cx, cy, nozzle, selected, onClick }: NozzleDotProps) {
        style={{ cursor: 'pointer' }}>
       <circle cx={cx} cy={cy} r={r + 4} fill="transparent" />
       <circle cx={cx} cy={cy} r={r} fill={color} stroke="white" strokeWidth={selected ? 2.5 : 1.5}
-              style={{ transition: 'r 0.15s ease', filter: selected ? `drop-shadow(0 0 6px ${color})` : 'none' }} />
+              style={{ filter: selected ? `drop-shadow(0 0 6px ${color})` : 'none' }} />
       {(hovered || selected) && (
         <g>
           <rect x={cx + 12} y={cy - 16} width={nozzle.name.length * 6.5 + 12} height={22} rx={4}
@@ -83,46 +84,71 @@ function NozzleDot({ cx, cy, nozzle, selected, onClick }: NozzleDotProps) {
 // ─── Rectangular ─────────────────────────────────────────────────────────────
 function RectangularTank({ config, selectedNozzleId, onSelectNozzle }: Props) {
   const { nozzles, dimensions: d } = config;
-
   const { bx, bz, by } = normalizeDims(d.length, d.width, d.height, 140);
-
   const ox = W / 2 - 20;
   const oy = H / 2 + by * 0.35;
 
-  const pts = (xs: [number, number, number][]) =>
-    xs.map(([x, y, z]) => { const p = isoProject(x, y, z, ox, oy); return `${p.px},${p.py}`; }).join(' ');
+  const pt = (x: number, y: number, z: number) => isoProject(x, y, z, ox, oy);
+  const ptsStr = (xs: [number, number, number][]) =>
+    xs.map(([x, y, z]) => { const p = pt(x, y, z); return `${p.px},${p.py}`; }).join(' ');
 
-  const topFace  = [[-bx, by, -bz], [bx, by, -bz], [bx, by, bz], [-bx, by, bz]] as [number, number, number][];
-  const frontFace = [[-bx, 0, bz], [bx, 0, bz], [bx, by, bz], [-bx, by, bz]] as [number, number, number][];
-  const rightFace = [[bx, 0, -bz], [bx, 0, bz], [bx, by, bz], [bx, by, -bz]] as [number, number, number][];
+  // Видимые грани
+  const topFace   = [[-bx, by, -bz], [bx, by, -bz], [bx, by, bz], [-bx, by, bz]] as [number,number,number][];
+  const frontFace = [[-bx, 0, bz], [bx, 0, bz], [bx, by, bz], [-bx, by, bz]] as [number,number,number][];
+  const rightFace = [[bx, 0, -bz], [bx, 0, bz], [bx, by, bz], [bx, by, -bz]] as [number,number,number][];
+
+  // Скрытые рёбра: левая грань (back-left) + задняя грань (back) + дно
+  // Вершины куба
+  const A = pt(-bx, 0,  -bz); // задний левый низ
+  const B = pt( bx, 0,  -bz); // задний правый низ
+  const C = pt( bx, 0,   bz); // передний правый низ
+  const D = pt(-bx, 0,   bz); // передний левый низ
+  const E = pt(-bx, by, -bz); // задний левый верх
+  const F = pt( bx, by, -bz); // задний правый верх
+  // видимые низ: D-C-B (часть дна), но нам нужна скрытая часть
+  // скрытые: A-B (дно зад), A-D (дно лево), A-E (стойка левая зад), E-F (верх зад уже виден как ребро top)
+
+  const hiddenEdges: [{ px: number; py: number }, { px: number; py: number }][] = [
+    [A, B], // дно — задняя грань низ
+    [A, D], // дно — левая грань низ
+    [A, E], // вертикальное ребро задне-левое
+  ];
 
   function topNozzlePos(nx: number, nz: number) {
-    return isoProject(lerp(-bx, bx, nx), by, lerp(-bz, bz, nz), ox, oy);
+    return pt(lerp(-bx, bx, nx), by, lerp(-bz, bz, nz));
   }
   function frontNozzlePos(nx: number, ny: number) {
-    return isoProject(lerp(-bx, bx, nx), lerp(by, 0, ny), bz, ox, oy);
+    return pt(lerp(-bx, bx, nx), lerp(by, 0, ny), bz);
   }
   function rightNozzlePos(nz: number, ny: number) {
-    return isoProject(bx, lerp(by, 0, ny), lerp(bz, -bz, nz), ox, oy);
+    return pt(bx, lerp(by, 0, ny), lerp(bz, -bz, nz));
   }
 
   return (
     <>
-      <polygon points={pts(topFace)}   fill="var(--tank-face-top)"   stroke="var(--tank-edge)" strokeWidth={2} />
-      <polygon points={pts(frontFace)} fill="var(--tank-face-left)"  stroke="var(--tank-edge)" strokeWidth={2} />
-      <polygon points={pts(rightFace)} fill="var(--tank-face-right)" stroke="var(--tank-edge)" strokeWidth={2} />
+      {/* Скрытые рёбра — за гранями */}
+      {hiddenEdges.map(([a, b], i) => (
+        <line key={i} x1={a.px} y1={a.py} x2={b.px} y2={b.py} {...DASH_PROPS} />
+      ))}
 
+      {/* Грани */}
+      <polygon points={ptsStr(topFace)}   fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
+      <polygon points={ptsStr(frontFace)} fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
+      <polygon points={ptsStr(rightFace)} fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
+
+      {/* Сетка на верхней грани */}
       {[0.25, 0.5, 0.75].map(t => {
-        const a = isoProject(lerp(-bx, bx, t), by, -bz, ox, oy);
-        const b = isoProject(lerp(-bx, bx, t), by,  bz, ox, oy);
-        return <line key={t} x1={a.px} y1={a.py} x2={b.px} y2={b.py} stroke="var(--tank-edge)" strokeWidth={0.5} opacity={0.4} />;
+        const a = pt(lerp(-bx, bx, t), by, -bz);
+        const b = pt(lerp(-bx, bx, t), by,  bz);
+        return <line key={`gx${t}`} x1={a.px} y1={a.py} x2={b.px} y2={b.py} stroke={EDGE_COLOR} strokeWidth={0.5} opacity={0.25} />;
       })}
       {[0.33, 0.67].map(t => {
-        const a = isoProject(-bx, by, lerp(-bz, bz, t), ox, oy);
-        const b = isoProject( bx, by, lerp(-bz, bz, t), ox, oy);
-        return <line key={t} x1={a.px} y1={a.py} x2={b.px} y2={b.py} stroke="var(--tank-edge)" strokeWidth={0.5} opacity={0.4} />;
+        const a = pt(-bx, by, lerp(-bz, bz, t));
+        const b = pt( bx, by, lerp(-bz, bz, t));
+        return <line key={`gz${t}`} x1={a.px} y1={a.py} x2={b.px} y2={b.py} stroke={EDGE_COLOR} strokeWidth={0.5} opacity={0.25} />;
       })}
 
+      {/* Патрубки */}
       {getFaceNozzles(nozzles, 'top').map(n => {
         const p = topNozzlePos(n.position.x, n.position.y);
         return <NozzleDot key={n.id} cx={p.px} cy={p.py} nozzle={n} selected={selectedNozzleId === n.id} onClick={() => onSelectNozzle(n.id)} />;
@@ -142,14 +168,11 @@ function RectangularTank({ config, selectedNozzleId, onSelectNozzle }: Props) {
 // ─── Vertical cylinder ───────────────────────────────────────────────────────
 function VerticalCylinderTank({ config, selectedNozzleId, onSelectNozzle }: Props) {
   const { nozzles, dimensions: d } = config;
-
-  // diameter = max(length, width), height = d.height
   const diameter = Math.max(d.length, d.width);
   const { rx, rz, h } = normalizeCylinder(diameter, d.length, d.height, 140, false);
-
   const ox = W / 2 - 20;
   const oy = H / 2 + h * 0.35;
-  const segs = 48;
+  const segs = 64;
 
   function ellipsePoint(t: number, dy: number) {
     const angle = (t / segs) * Math.PI * 2;
@@ -162,6 +185,7 @@ function VerticalCylinderTank({ config, selectedNozzleId, onSelectNozzle }: Prop
   const topPath = topPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.px},${p.py}`).join(' ') + 'Z';
   const botPath = botPoints.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.px},${p.py}`).join(' ') + 'Z';
 
+  // Видимая боковая грань (правая полуокружность)
   const rightEdgePts: string[] = [];
   for (let i = Math.ceil(segs * 0.25); i <= Math.floor(segs * 0.75); i++) {
     const pt = ellipsePoint(i, h);
@@ -172,6 +196,30 @@ function VerticalCylinderTank({ config, selectedNozzleId, onSelectNozzle }: Prop
     rightEdgePts.push(`L${pb.px},${pb.py}`);
   }
   rightEdgePts.push('Z');
+
+  // Скрытая боковая полуокружность (левая) — верх и низ
+  const hiddenTopArc: string[] = [];
+  const hiddenBotArc: string[] = [];
+  for (let i = 0; i <= Math.ceil(segs * 0.25); i++) {
+    const pt = ellipsePoint(i, h);
+    hiddenTopArc.push(`${i === 0 ? 'M' : 'L'}${pt.px},${pt.py}`);
+  }
+  for (let i = Math.floor(segs * 0.75); i <= segs; i++) {
+    const pt = ellipsePoint(i, h);
+    hiddenTopArc.push(`L${pt.px},${pt.py}`);
+  }
+  for (let i = 0; i <= Math.ceil(segs * 0.25); i++) {
+    const pb = ellipsePoint(i, 0);
+    hiddenBotArc.push(`${i === 0 ? 'M' : 'L'}${pb.px},${pb.py}`);
+  }
+  for (let i = Math.floor(segs * 0.75); i <= segs; i++) {
+    const pb = ellipsePoint(i, 0);
+    hiddenBotArc.push(`L${pb.px},${pb.py}`);
+  }
+
+  // Две скрытые вертикальные образующие (крайние левые точки)
+  const leftTop = ellipsePoint(0, h);
+  const leftBot = ellipsePoint(0, 0);
 
   function topNozzlePos(nx: number) {
     const angle = nx * Math.PI * 2;
@@ -184,14 +232,21 @@ function VerticalCylinderTank({ config, selectedNozzleId, onSelectNozzle }: Prop
 
   return (
     <>
-      <path d={rightEdgePts.join(' ')} fill="var(--tank-face-right)" stroke="var(--tank-edge)" strokeWidth={2} />
-      <path d={botPath} fill="var(--tank-face-left)"  stroke="var(--tank-edge)" strokeWidth={2} />
-      <path d={topPath} fill="var(--tank-face-top)"   stroke="var(--tank-edge)" strokeWidth={2} />
+      {/* Скрытые линии */}
+      <path d={hiddenTopArc.join(' ')} fill="none" {...DASH_PROPS} />
+      <path d={hiddenBotArc.join(' ')} fill="none" {...DASH_PROPS} />
+      <line x1={leftTop.px} y1={leftTop.py} x2={leftBot.px} y2={leftBot.py} {...DASH_PROPS} />
 
+      {/* Грани */}
+      <path d={rightEdgePts.join(' ')} fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
+      <path d={botPath}  fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
+      <path d={topPath}  fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
+
+      {/* Осевые крест */}
       {[0, Math.PI * 0.5].map((a, i) => {
-        const p1 = isoProject( Math.cos(a) * rx * 0.9, h,  Math.sin(a) * rz * 0.9, ox, oy);
-        const p2 = isoProject(-Math.cos(a) * rx * 0.9, h, -Math.sin(a) * rz * 0.9, ox, oy);
-        return <line key={i} x1={p1.px} y1={p1.py} x2={p2.px} y2={p2.py} stroke="var(--tank-edge)" strokeWidth={0.5} opacity={0.35} />;
+        const p1 = isoProject( Math.cos(a) * rx * 0.88, h,  Math.sin(a) * rz * 0.88, ox, oy);
+        const p2 = isoProject(-Math.cos(a) * rx * 0.88, h, -Math.sin(a) * rz * 0.88, ox, oy);
+        return <line key={i} x1={p1.px} y1={p1.py} x2={p2.px} y2={p2.py} stroke={EDGE_COLOR} strokeWidth={0.5} opacity={0.3} />;
       })}
 
       {getFaceNozzles(nozzles, 'top').map(n => {
@@ -211,14 +266,11 @@ function VerticalCylinderTank({ config, selectedNozzleId, onSelectNozzle }: Prop
 // ─── Horizontal cylinder ─────────────────────────────────────────────────────
 function HorizontalCylinderTank({ config, selectedNozzleId, onSelectNozzle }: Props) {
   const { nozzles, dimensions: d } = config;
-
-  // d.length = длина цилиндра, d.width = d.height = диаметр
   const diameter = Math.max(d.width, d.height);
   const { len, ry, rz } = normalizeCylinder(diameter, d.length, d.height, 140, true);
-
   const ox = W / 2 - 20;
   const oy = H / 2 + ry * 0.3;
-  const segs = 48;
+  const segs = 64;
 
   function ellipsePoint(t: number, dx: number) {
     const angle = (t / segs) * Math.PI * 2;
@@ -231,73 +283,91 @@ function HorizontalCylinderTank({ config, selectedNozzleId, onSelectNozzle }: Pr
   const frontPath = frontPts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.px},${p.py}`).join(' ') + 'Z';
   const backPath  = backPts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p.px},${p.py}`).join(' ') + 'Z';
 
+  // Верхняя оболочка
   const topShell: string[] = [];
   for (let i = 0; i <= Math.floor(segs / 2); i++) {
     const angle = (i / segs) * Math.PI * 2;
-    const y = Math.sin(angle) * ry + ry;
-    const z = Math.cos(angle) * rz;
-    const p = isoProject(i === 0 ? len : len, y, z, ox, oy);
+    const p = isoProject(len, Math.sin(angle) * ry + ry, Math.cos(angle) * rz, ox, oy);
     topShell.push(`${i === 0 ? 'M' : 'L'}${p.px},${p.py}`);
   }
   for (let i = Math.floor(segs / 2); i >= 0; i--) {
     const angle = (i / segs) * Math.PI * 2;
-    const y = Math.sin(angle) * ry + ry;
-    const z = Math.cos(angle) * rz;
-    const p = isoProject(-len, y, z, ox, oy);
+    const p = isoProject(-len, Math.sin(angle) * ry + ry, Math.cos(angle) * rz, ox, oy);
     topShell.push(`L${p.px},${p.py}`);
   }
   topShell.push('Z');
 
+  // Правая оболочка
   const rightShell: string[] = [];
   for (let i = 0; i <= Math.floor(segs / 4); i++) {
     const angle = (i / segs) * Math.PI * 2;
-    const y = Math.sin(angle) * ry + ry;
-    const z = Math.cos(angle) * rz;
-    const p = isoProject(len, y, z, ox, oy);
+    const p = isoProject(len, Math.sin(angle) * ry + ry, Math.cos(angle) * rz, ox, oy);
     rightShell.push(`${i === 0 ? 'M' : 'L'}${p.px},${p.py}`);
   }
   for (let i = Math.floor(segs / 4); i >= 0; i--) {
     const angle = (i / segs) * Math.PI * 2;
-    const y = Math.sin(angle) * ry + ry;
-    const z = Math.cos(angle) * rz;
-    const p = isoProject(-len, y, z, ox, oy);
+    const p = isoProject(-len, Math.sin(angle) * ry + ry, Math.cos(angle) * rz, ox, oy);
     rightShell.push(`L${p.px},${p.py}`);
   }
   rightShell.push('Z');
 
-  // Опоры — масштабируем с баком
+  // Скрытая нижняя образующая (дно цилиндра)
+  const hiddenBot: string[] = [];
+  for (let i = Math.floor(segs / 2); i <= segs; i++) {
+    const angle = (i / segs) * Math.PI * 2;
+    const p = isoProject(len, Math.sin(angle) * ry + ry, Math.cos(angle) * rz, ox, oy);
+    hiddenBot.push(`${i === Math.floor(segs / 2) ? 'M' : 'L'}${p.px},${p.py}`);
+  }
+
+  // Скрытая нижняя образующая на задней крышке
+  const hiddenBotBack: string[] = [];
+  for (let i = Math.floor(segs / 2); i <= segs; i++) {
+    const angle = (i / segs) * Math.PI * 2;
+    const p = isoProject(-len, Math.sin(angle) * ry + ry, Math.cos(angle) * rz, ox, oy);
+    hiddenBotBack.push(`${i === Math.floor(segs / 2) ? 'M' : 'L'}${p.px},${p.py}`);
+  }
+
+  // Скрытые продольные образующие (нижние)
+  const botFront = ellipsePoint(Math.floor(segs / 2), len);
+  const botBack  = ellipsePoint(Math.floor(segs / 2), -len);
+
+  // Опоры
   const supH = ry * 0.45;
   const supX = [-len * 0.55, len * 0.55];
-  const supPts = supX.map(sx => {
-    const bot  = isoProject(sx, -supH, 0, ox, oy);
-    const topL = isoProject(sx, 0, -rz * 0.8, ox, oy);
-    const topR = isoProject(sx, 0,  rz * 0.8, ox, oy);
-    return { bot, topL, topR };
-  });
+  const supPts = supX.map(sx => ({
+    bot:  isoProject(sx, -supH, 0, ox, oy),
+    topL: isoProject(sx, 0, -rz * 0.8, ox, oy),
+    topR: isoProject(sx, 0,  rz * 0.8, ox, oy),
+  }));
 
   function topNozzlePos(nx: number) {
-    const x = lerp(-len, len, nx);
-    return isoProject(x, ry * 2, 0, ox, oy);
+    return isoProject(lerp(-len, len, nx), ry * 2, 0, ox, oy);
   }
   function frontNozzlePos(nx: number, ny: number) {
     const angle = ny * Math.PI * 2;
-    const y = Math.sin(angle) * ry + ry;
-    const z = Math.cos(angle) * rz;
-    return isoProject(len, y, z, ox, oy);
+    return isoProject(len, Math.sin(angle) * ry + ry, Math.cos(angle) * rz, ox, oy);
   }
 
   return (
     <>
+      {/* Опоры */}
       {supPts.map((s, i) => (
         <g key={i}>
-          <line x1={s.topL.px} y1={s.topL.py} x2={s.bot.px} y2={s.bot.py} stroke="var(--tank-edge)" strokeWidth={Math.max(2, ry * 0.035)} />
-          <line x1={s.topR.px} y1={s.topR.py} x2={s.bot.px} y2={s.bot.py} stroke="var(--tank-edge)" strokeWidth={Math.max(2, ry * 0.035)} />
+          <line x1={s.topL.px} y1={s.topL.py} x2={s.bot.px} y2={s.bot.py} stroke={EDGE_COLOR} strokeWidth={Math.max(2, ry * 0.035)} />
+          <line x1={s.topR.px} y1={s.topR.py} x2={s.bot.px} y2={s.bot.py} stroke={EDGE_COLOR} strokeWidth={Math.max(2, ry * 0.035)} />
         </g>
       ))}
-      <path d={backPath}            fill="var(--tank-face-left)"  stroke="var(--tank-edge)" strokeWidth={2} />
-      <path d={topShell.join(' ')}  fill="var(--tank-face-top)"   stroke="var(--tank-edge)" strokeWidth={2} />
-      <path d={rightShell.join(' ')} fill="var(--tank-face-right)" stroke="var(--tank-edge)" strokeWidth={2} />
-      <path d={frontPath}           fill="var(--tank-face-left)"  stroke="var(--tank-edge)" strokeWidth={2} />
+
+      {/* Скрытые линии */}
+      <path d={hiddenBot.join(' ')}     fill="none" {...DASH_PROPS} />
+      <path d={hiddenBotBack.join(' ')} fill="none" {...DASH_PROPS} />
+      <line x1={botFront.px} y1={botFront.py} x2={botBack.px} y2={botBack.py} {...DASH_PROPS} />
+
+      {/* Грани */}
+      <path d={backPath}             fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
+      <path d={topShell.join(' ')}   fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
+      <path d={rightShell.join(' ')} fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
+      <path d={frontPath}            fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
 
       {getFaceNozzles(nozzles, 'top').map(n => {
         const p = topNozzlePos(n.position.x);
@@ -319,12 +389,10 @@ export default function IsometricTank({ config, selectedNozzleId, onSelectNozzle
 
   return (
     <div className="relative w-full h-full flex items-center justify-center">
-      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}
-           style={{ '--tank-face-top': 'var(--tank-face-top)', '--tank-face-left': 'var(--tank-face-left)', '--tank-face-right': 'var(--tank-face-right)', '--tank-edge': 'var(--tank-edge)' } as React.CSSProperties}>
-
+      <svg width={W} height={H} viewBox={`0 0 ${W} ${H}`}>
         <defs>
           <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#4a7aaa" floodOpacity="0.30" />
+            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor={EDGE_COLOR} floodOpacity="0.20" />
           </filter>
         </defs>
 
@@ -340,8 +408,8 @@ export default function IsometricTank({ config, selectedNozzleId, onSelectNozzle
           )}
         </g>
 
-        <text x={W - 12} y={H - 8} fontSize={10} fill="hsl(var(--muted-foreground))" textAnchor="end"
-              fontFamily="IBM Plex Mono, monospace">
+        <text x={W - 12} y={H - 8} fontSize={10} fill={HIDDEN_COLOR} textAnchor="end"
+              fontFamily="IBM Plex Mono, monospace" opacity={0.7}>
           {dim.length}×{dim.width}×{dim.height} мм
         </text>
       </svg>
