@@ -34,10 +34,10 @@
 
     --radius: 6px;
 
-    --tank-face-top: #d0dae8;
-    --tank-face-left: #b8c8dc;
-    --tank-face-right: #9aafc8;
-    --tank-edge: #7a9ab8;
+    --tank-face-top: rgba(160, 195, 230, 0.12);
+    --tank-face-left: rgba(130, 170, 215, 0.1);
+    --tank-face-right: rgba(100, 145, 200, 0.1);
+    --tank-edge: #4a7aaa;
     --nozzle-active: #1a6bc4;
     --nozzle-hover: #2d8ae8;
     --nozzle-inactive: #94a3b8;

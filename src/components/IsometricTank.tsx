@@ -108,9 +108,9 @@ function RectangularTank({ config, selectedNozzleId, onSelectNozzle }: Props) {
 
   return (
     <>
-      <polygon points={pts(topFace)}   fill="var(--tank-face-top)"   stroke="var(--tank-edge)" strokeWidth={1.5} />
-      <polygon points={pts(frontFace)} fill="var(--tank-face-left)"  stroke="var(--tank-edge)" strokeWidth={1.5} />
-      <polygon points={pts(rightFace)} fill="var(--tank-face-right)" stroke="var(--tank-edge)" strokeWidth={1.5} />
+      <polygon points={pts(topFace)}   fill="var(--tank-face-top)"   stroke="var(--tank-edge)" strokeWidth={2} />
+      <polygon points={pts(frontFace)} fill="var(--tank-face-left)"  stroke="var(--tank-edge)" strokeWidth={2} />
+      <polygon points={pts(rightFace)} fill="var(--tank-face-right)" stroke="var(--tank-edge)" strokeWidth={2} />
 
       {[0.25, 0.5, 0.75].map(t => {
         const a = isoProject(lerp(-bx, bx, t), by, -bz, ox, oy);
@@ -184,9 +184,9 @@ function VerticalCylinderTank({ config, selectedNozzleId, onSelectNozzle }: Prop
 
   return (
     <>
-      <path d={rightEdgePts.join(' ')} fill="var(--tank-face-right)" stroke="var(--tank-edge)" strokeWidth={1.5} />
-      <path d={botPath} fill="var(--tank-face-left)"  stroke="var(--tank-edge)" strokeWidth={1.5} />
-      <path d={topPath} fill="var(--tank-face-top)"   stroke="var(--tank-edge)" strokeWidth={1.5} />
+      <path d={rightEdgePts.join(' ')} fill="var(--tank-face-right)" stroke="var(--tank-edge)" strokeWidth={2} />
+      <path d={botPath} fill="var(--tank-face-left)"  stroke="var(--tank-edge)" strokeWidth={2} />
+      <path d={topPath} fill="var(--tank-face-top)"   stroke="var(--tank-edge)" strokeWidth={2} />
 
       {[0, Math.PI * 0.5].map((a, i) => {
         const p1 = isoProject( Math.cos(a) * rx * 0.9, h,  Math.sin(a) * rz * 0.9, ox, oy);
@@ -294,10 +294,10 @@ function HorizontalCylinderTank({ config, selectedNozzleId, onSelectNozzle }: Pr
           <line x1={s.topR.px} y1={s.topR.py} x2={s.bot.px} y2={s.bot.py} stroke="var(--tank-edge)" strokeWidth={Math.max(2, ry * 0.035)} />
         </g>
       ))}
-      <path d={backPath}            fill="var(--tank-face-left)"  stroke="var(--tank-edge)" strokeWidth={1.5} />
-      <path d={topShell.join(' ')}  fill="var(--tank-face-top)"   stroke="var(--tank-edge)" strokeWidth={1.5} />
-      <path d={rightShell.join(' ')} fill="var(--tank-face-right)" stroke="var(--tank-edge)" strokeWidth={1.5} />
-      <path d={frontPath}           fill="var(--tank-face-left)"  stroke="var(--tank-edge)" strokeWidth={1.5} />
+      <path d={backPath}            fill="var(--tank-face-left)"  stroke="var(--tank-edge)" strokeWidth={2} />
+      <path d={topShell.join(' ')}  fill="var(--tank-face-top)"   stroke="var(--tank-edge)" strokeWidth={2} />
+      <path d={rightShell.join(' ')} fill="var(--tank-face-right)" stroke="var(--tank-edge)" strokeWidth={2} />
+      <path d={frontPath}           fill="var(--tank-face-left)"  stroke="var(--tank-edge)" strokeWidth={2} />
 
       {getFaceNozzles(nozzles, 'top').map(n => {
         const p = topNozzlePos(n.position.x);
@@ -324,7 +324,7 @@ export default function IsometricTank({ config, selectedNozzleId, onSelectNozzle
 
         <defs>
           <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
-            <feDropShadow dx="0" dy="4" stdDeviation="6" floodColor="#94a3b8" floodOpacity="0.25" />
+            <feDropShadow dx="0" dy="2" stdDeviation="3" floodColor="#4a7aaa" floodOpacity="0.30" />
           </filter>
         </defs>
 
