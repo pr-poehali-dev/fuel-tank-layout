@@ -49,6 +49,35 @@ const DASH_PROPS = {
   opacity: 0.85,
 };
 
+// Атрибуты осевых линий (тонкий штрихпунктир, красный — ГОСТ)
+const AXIS_PROPS = {
+  stroke: '#c0392b',
+  strokeWidth: 0.9,
+  strokeDasharray: '10 3 2 3',
+  opacity: 0.75,
+};
+
+// Рисует центровой крестик в изометрии на плоской эллиптической грани.
+// cx/cy — центр в SVG, dx1/dy1 и dx2/dy2 — полуоси крестика по двум направлениям.
+function AxisCross({
+  cx, cy,
+  dx1, dy1,   // направление «вдоль» (горизонталь крестика)
+  dx2, dy2,   // направление «поперёк» (вертикаль крестика)
+  r = 1.15,   // коэффициент удлинения за круг
+}: {
+  cx: number; cy: number;
+  dx1: number; dy1: number;
+  dx2: number; dy2: number;
+  r?: number;
+}) {
+  return (
+    <g>
+      <line x1={cx - dx1 * r} y1={cy - dy1 * r} x2={cx + dx1 * r} y2={cy + dy1 * r} {...AXIS_PROPS} />
+      <line x1={cx - dx2 * r} y1={cy - dy2 * r} x2={cx + dx2 * r} y2={cy + dy2 * r} {...AXIS_PROPS} />
+    </g>
+  );
+}
+
 // ─── NozzleDot ───────────────────────────────────────────────────────────────
 interface NozzleDotProps {
   cx: number; cy: number;
@@ -148,6 +177,36 @@ function RectangularTank({ config, selectedNozzleId, onSelectNozzle }: Props) {
         return <line key={`gz${t}`} x1={a.px} y1={a.py} x2={b.px} y2={b.py} stroke={EDGE_COLOR} strokeWidth={0.5} opacity={0.25} />;
       })}
 
+      {/* Осевые крестики — на верхней, передней и правой гранях */}
+      {(() => {
+        // верхняя грань: центр (0, by, 0)
+        // полуоси в изо-проекции: X→ и Z→
+        const topC  = pt(0, by, 0);
+        const topX1 = pt(bx, by, 0); const topX2 = pt(-bx, by, 0);
+        const topZ1 = pt(0, by, bz); const topZ2 = pt(0, by, -bz);
+        // передняя грань: центр (0, by/2, bz)
+        const fC  = pt(0, by * 0.5, bz);
+        const fX1 = pt(bx, by * 0.5, bz); const fX2 = pt(-bx, by * 0.5, bz);
+        const fY1 = pt(0, by, bz);        const fY2 = pt(0, 0, bz);
+        // правая грань: центр (bx, by/2, 0)
+        const rC  = pt(bx, by * 0.5, 0);
+        const rZ1 = pt(bx, by * 0.5, bz); const rZ2 = pt(bx, by * 0.5, -bz);
+        const rY1 = pt(bx, by, 0);        const rY2 = pt(bx, 0, 0);
+        return (
+          <>
+            <AxisCross cx={topC.px} cy={topC.py}
+              dx1={(topX1.px - topX2.px) / 2} dy1={(topX1.py - topX2.py) / 2}
+              dx2={(topZ1.px - topZ2.px) / 2} dy2={(topZ1.py - topZ2.py) / 2} />
+            <AxisCross cx={fC.px} cy={fC.py}
+              dx1={(fX1.px - fX2.px) / 2} dy1={(fX1.py - fX2.py) / 2}
+              dx2={(fY1.px - fY2.px) / 2} dy2={(fY1.py - fY2.py) / 2} />
+            <AxisCross cx={rC.px} cy={rC.py}
+              dx1={(rZ1.px - rZ2.px) / 2} dy1={(rZ1.py - rZ2.py) / 2}
+              dx2={(rY1.px - rY2.px) / 2} dy2={(rY1.py - rY2.py) / 2} />
+          </>
+        );
+      })()}
+
       {/* Патрубки */}
       {getFaceNozzles(nozzles, 'top').map(n => {
         const p = topNozzlePos(n.position.x, n.position.y);
@@ -242,12 +301,33 @@ function VerticalCylinderTank({ config, selectedNozzleId, onSelectNozzle }: Prop
       <path d={botPath}  fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
       <path d={topPath}  fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
 
-      {/* Осевые крест */}
-      {[0, Math.PI * 0.5].map((a, i) => {
-        const p1 = isoProject( Math.cos(a) * rx * 0.88, h,  Math.sin(a) * rz * 0.88, ox, oy);
-        const p2 = isoProject(-Math.cos(a) * rx * 0.88, h, -Math.sin(a) * rz * 0.88, ox, oy);
-        return <line key={i} x1={p1.px} y1={p1.py} x2={p2.px} y2={p2.py} stroke={EDGE_COLOR} strokeWidth={0.5} opacity={0.3} />;
-      })}
+      {/* Осевые крестики — верхний и нижний торец */}
+      {(() => {
+        // Верхний торец: 2 оси в плоскости эллипса (X и Z направления)
+        const topC = isoProject(0, h, 0, ox, oy);
+        const tX1  = isoProject( rx, h, 0, ox, oy);
+        const tX2  = isoProject(-rx, h, 0, ox, oy);
+        const tZ1  = isoProject(0, h,  rz, ox, oy);
+        const tZ2  = isoProject(0, h, -rz, ox, oy);
+        // Нижний торец (скрытый — чуть светлее)
+        const botC = isoProject(0, 0, 0, ox, oy);
+        const bX1  = isoProject( rx, 0, 0, ox, oy);
+        const bX2  = isoProject(-rx, 0, 0, ox, oy);
+        const bZ1  = isoProject(0, 0,  rz, ox, oy);
+        const bZ2  = isoProject(0, 0, -rz, ox, oy);
+        return (
+          <>
+            <AxisCross cx={topC.px} cy={topC.py}
+              dx1={(tX1.px - tX2.px) / 2} dy1={(tX1.py - tX2.py) / 2}
+              dx2={(tZ1.px - tZ2.px) / 2} dy2={(tZ1.py - tZ2.py) / 2} />
+            {/* Нижний крестик — пунктиром, т.к. скрытый */}
+            <line x1={bX2.px} y1={bX2.py} x2={bX1.px} y2={bX1.py} {...AXIS_PROPS} strokeDasharray="6 4" opacity={0.45} />
+            <line x1={bZ2.px} y1={bZ2.py} x2={bZ1.px} y2={bZ1.py} {...AXIS_PROPS} strokeDasharray="6 4" opacity={0.45} />
+            {/* Вертикальная осевая линия по высоте */}
+            <line x1={topC.px} y1={topC.py} x2={botC.px} y2={botC.py} {...AXIS_PROPS} />
+          </>
+        );
+      })()}
 
       {getFaceNozzles(nozzles, 'top').map(n => {
         const p = topNozzlePos(n.position.x);
@@ -368,6 +448,36 @@ function HorizontalCylinderTank({ config, selectedNozzleId, onSelectNozzle }: Pr
       <path d={topShell.join(' ')}   fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
       <path d={rightShell.join(' ')} fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
       <path d={frontPath}            fill={FACE_FILL} stroke={EDGE_COLOR} strokeWidth={2} />
+
+      {/* Осевые крестики — передний и задний торец + продольная ось */}
+      {(() => {
+        // Передний торец (виден)
+        const fC  = isoProject(len, ry, 0, ox, oy);
+        const fY1 = isoProject(len, ry * 2, 0, ox, oy);
+        const fY2 = isoProject(len, 0, 0, ox, oy);
+        const fZ1 = isoProject(len, ry, rz, ox, oy);
+        const fZ2 = isoProject(len, ry, -rz, ox, oy);
+        // Задний торец (скрытый)
+        const bC  = isoProject(-len, ry, 0, ox, oy);
+        const bY1 = isoProject(-len, ry * 2, 0, ox, oy);
+        const bY2 = isoProject(-len, 0, 0, ox, oy);
+        const bZ1 = isoProject(-len, ry, rz, ox, oy);
+        const bZ2 = isoProject(-len, ry, -rz, ox, oy);
+        // Продольная осевая (центр цилиндра)
+        return (
+          <>
+            {/* Передний крестик */}
+            <AxisCross cx={fC.px} cy={fC.py}
+              dx1={(fY1.px - fY2.px) / 2} dy1={(fY1.py - fY2.py) / 2}
+              dx2={(fZ1.px - fZ2.px) / 2} dy2={(fZ1.py - fZ2.py) / 2} />
+            {/* Задний крестик — пунктиром */}
+            <line x1={bY2.px} y1={bY2.py} x2={bY1.px} y2={bY1.py} {...AXIS_PROPS} strokeDasharray="6 4" opacity={0.45} />
+            <line x1={bZ2.px} y1={bZ2.py} x2={bZ1.px} y2={bZ1.py} {...AXIS_PROPS} strokeDasharray="6 4" opacity={0.45} />
+            {/* Горизонтальная продольная ось */}
+            <line x1={fC.px} y1={fC.py} x2={bC.px} y2={bC.py} {...AXIS_PROPS} />
+          </>
+        );
+      })()}
 
       {getFaceNozzles(nozzles, 'top').map(n => {
         const p = topNozzlePos(n.position.x);
