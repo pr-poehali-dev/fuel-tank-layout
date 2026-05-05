@@ -3,7 +3,7 @@ import {
   TankConfig, TankType, Nozzle, HistoryEntry,
   TANK_PRESETS, createDefaultNozzles,
 } from '@/types/tank';
-import IsometricTank from '@/components/IsometricTank';
+import IsometricTank, { ViewMode } from '@/components/IsometricTank';
 import TankSelector from '@/components/TankSelector';
 import NozzleEditor from '@/components/NozzleEditor';
 import DimensionsPanel from '@/components/DimensionsPanel';
@@ -43,6 +43,7 @@ export default function Index() {
   const [historyIndex, setHistoryIndex] = useState(0);
   const [activePanel, setActivePanel] = useState<Panel>('tank');
   const [selectedNozzleId, setSelectedNozzleId] = useState<string | null>(null);
+  const [viewMode, setViewMode] = useState<ViewMode>('iso');
 
   const pushHistory = useCallback((cfg: TankConfig, description: string) => {
     const entry: HistoryEntry = {
@@ -232,12 +233,32 @@ export default function Index() {
         {/* Main view */}
         <main className="flex-1 flex flex-col overflow-hidden bg-background">
           {/* Toolbar */}
-          <div className="flex-shrink-0 flex items-center justify-between px-6 py-3 border-b border-border bg-white/60 backdrop-blur-sm">
-            <div className="flex items-center gap-3">
-              <span className="text-xs text-muted-foreground uppercase tracking-wide font-medium">Изометрия</span>
+          <div className="flex-shrink-0 flex items-center justify-between px-4 py-2.5 border-b border-border bg-white/60 backdrop-blur-sm">
+            {/* View switcher */}
+            <div className="flex items-center gap-1 p-0.5 bg-secondary/70 rounded-lg border border-border">
+              {([
+                { id: 'iso'   as ViewMode, label: 'Изо',    icon: 'Box' },
+                { id: 'front' as ViewMode, label: 'Спереди', icon: 'RectangleHorizontal' },
+                { id: 'side'  as ViewMode, label: 'Сбоку',   icon: 'RectangleVertical' },
+                { id: 'top'   as ViewMode, label: 'Сверху',  icon: 'Square' },
+              ]).map(v => (
+                <button
+                  key={v.id}
+                  onClick={() => setViewMode(v.id)}
+                  className={[
+                    'flex items-center gap-1.5 px-3 py-1.5 text-xs rounded-md transition-all font-medium',
+                    viewMode === v.id
+                      ? 'bg-white text-primary shadow-sm border border-border'
+                      : 'text-muted-foreground hover:text-foreground',
+                  ].join(' ')}
+                >
+                  <Icon name={v.icon} fallback="Square" size={12} />
+                  {v.label}
+                </button>
+              ))}
             </div>
             <div className="flex items-center gap-3 text-xs text-muted-foreground">
-              <span className="font-mono">{config.nozzles.filter(n => n.enabled).length} патрубков активно</span>
+              <span className="font-mono">{config.nozzles.filter(n => n.enabled).length} патрубков</span>
               <span>·</span>
               <span className="font-mono">{config.dimensions.length} × {config.dimensions.width} × {config.dimensions.height} мм</span>
               <span>·</span>
@@ -257,6 +278,7 @@ export default function Index() {
                 config={config}
                 selectedNozzleId={selectedNozzleId}
                 onSelectNozzle={id => { setSelectedNozzleId(id); setActivePanel('nozzles'); }}
+                viewMode={viewMode}
               />
             </div>
           </div>
